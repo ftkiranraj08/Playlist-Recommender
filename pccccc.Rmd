@@ -1,0 +1,343 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+## Chi-Square Test of Independence: Playlist Type vs. Track Genre
+
+In this project, we first performed a Chi-Square Test of Independence on all the playlists to examine the relationship between playlist type (e.g., workout, chill, motivation) and track genre. The goal was to determine if certain playlist types are more likely to contain specific genres, for example, if workout playlist contains a lot of hip-hop or chill playlist contains a lot of lofi songs, thus providing valuable insights for improving playlist recommendation systems.
+
+## Hypotheses:
+
+**Null Hypothesis (H0):** Playlist type and track genre are independent. In other words, the typer of playlist has no effect on the genres of tracks it contains.
+
+**Alternative Hypothesis (H1):** Playlist type and track genre are dependent. This means that the type of playlist is associated with the genres of tracks it contains.
+
+## Test Procedure:
+
+1. Contingency Table: A table was created with playlist types as rows and track genres as columns, showing the frequency of each genre within each playlist type.
+2. Chi-Square Calculation: We calculated the Chi-Square statistic to compare observed frequencies with expected frequencies under the assumption of independence.
+3. Hypothesis Testing: A p-value was obtained to test the null hypothesis. If the p-value was less than 0.05, we rejected the null hypothesis and concluded that playlist type and track genre are dependent.
+
+## Results:
+
+**Test Statistic (X-squared):** 9616.6
+ 
+**Degrees of Freedom (df):** 240
+
+**p-value:** < 2.2e-16
+
+The p-value of less than 2.2e-16 is extremely small, indicating strong evidence against the null hypothesis. As a result, we reject the null hypothesis and conclude that playlist type and track genre are statistically significantly associated. This means that certain types of playlists (e.g., workout, chill) are more likely to feature specific genres, suggesting a dependency between playlist type and genre.
+
+## Conclusion:
+
+The results of the Chi-Square Test of Independence provide compelling evidence that playlist types influence the genres of tracks they contain. This insight can be used to improve playlist recommendation systems by incorporating genre preferences based on the type of playlist a user is interested in.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+
+# Specify the folder containing the CSV files
+folder_path <- "/Users/ft_kiranraj/Desktop/Statsproject/MMerged_csv/"
+
+# Step 1: Read and aggregate all CSV files
+# List all CSV files in the folder
+csv_files <- list.files(path = folder_path, pattern = "*.csv", full.names = TRUE)
+
+# Initialize an empty data frame to store aggregated data
+all_data <- data.frame(final_genre = character(), Theme = character(), stringsAsFactors = FALSE)
+
+# Loop through each CSV file, read it, and append the data
+for (file in csv_files) {
+  # Read the CSV file
+  data <- read.csv(file)
+  
+  # Extract the playlist theme (Type)
+  playlist_theme <- unique(data$Type)  # All rows in a file share the same Type
+  
+  # Check for consistency: ensure only one theme exists per file
+  if (length(playlist_theme) != 1) {
+    stop(paste("Error: File", file, "contains multiple or no unique themes in the 'Type' column."))
+  }
+  
+  # Add the theme as a new column
+  data <- data %>%
+    select(final_genre) %>%            # Keep only the genre column
+    mutate(Theme = playlist_theme)    # Add the playlist theme as a new column
+  
+  # Append to the combined data frame
+  all_data <- rbind(all_data, data)
+}
+
+# View the combined dataset
+print("Aggregated Data:")
+print(head(all_data))
+
+# Step 2: Create a contingency table
+contingency_table <- table(all_data$final_genre, all_data$Theme)
+
+# Save the contingency table to a CSV file
+write.csv(as.data.frame(contingency_table), "/Users/ft_kiranraj/Desktop/Statsproject/contingency_table.csv")
+
+# Step 3: Perform the Chi-Square Test of Independence
+chi_square_test <- chisq.test(contingency_table)
+
+# Print the hypothesis
+cat("Null Hypothesis (H0): There is no association between song genres and playlist themes.\n")
+cat("Alternative Hypothesis (H1): There is an association between song genres and playlist themes.\n\n")
+
+# Print the chi-square test results
+print("Chi-Square Test Results:")
+print(chi_square_test)
+
+# Interpret the p-value and print hypothesis result
+alpha <- 0.05  # Significance level (usually 0.05)
+p_value <- chi_square_test$p.value
+
+if (p_value < alpha) {
+  cat("Since the p-value (", p_value, ") is less than the significance level (", alpha, "), we reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is a statistically significant association between song genres and playlist themes.\n")
+} else {
+  cat("Since the p-value (", p_value, ") is greater than the significance level (", alpha, "), we fail to reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is no statistically significant association between song genres and playlist themes.\n")
+}
+
+# Save Chi-Square results summary to a text file
+sink("/Users/ft_kiranraj/Desktop/Statsproject/chi_square_test_results.txt")
+cat("Null Hypothesis (H0): There is no association between song genres and playlist themes.\n")
+cat("Alternative Hypothesis (H1): There is an association between song genres and playlist themes.\n\n")
+print(chi_square_test)
+
+if (p_value < alpha) {
+  cat("Since the p-value (", p_value, ") is less than the significance level (", alpha, "), we reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is a statistically significant association between song genres and playlist themes.\n")
+} else {
+  cat("Since the p-value (", p_value, ") is greater than the significance level (", alpha, "), we fail to reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is no statistically significant association between song genres and playlist themes.\n")
+}
+sink()
+
+# Step 4: Generate Visualizations
+
+# Custom color palette based on the number of genre categories
+num_genres <- length(unique(all_data$final_genre))
+genre_palette <- colorRampPalette(RColorBrewer::brewer.pal(8, "Set3"))(num_genres)
+
+all_data$final_genre <- factor(all_data$final_genre)
+
+# Custom color palette based on the number of playlist themes
+num_themes <- length(unique(all_data$Theme))
+theme_palette <- colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(num_themes)
+
+# 1. Bar Plot: Distribution of Genres Across Playlist Themes
+bar_plot <- ggplot(all_data, aes(x = Theme, fill = final_genre)) +
+  geom_bar(position = "dodge", color = "black") +  # Dodge for side-by-side bars
+  scale_fill_manual(values = genre_palette) +  # Use the custom genre palette
+  labs(
+    title = "Distribution of Song Genres Across Playlist Themes",
+    x = "Playlist Theme",
+    y = "Number of Tracks"
+  ) +
+  theme_minimal(base_size = 14) +  # Improve plot readability with a larger base font size
+  theme(
+    legend.position = "right",  # Move the legend to the right
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for better readability
+    axis.text = element_text(size = 12),  # Make the axis text larger for clarity
+    axis.title = element_text(size = 14),  # Make axis titles larger
+    plot.title = element_text(size = 16, face = "bold")  # Make the plot title larger and bold
+  )
+
+# 2. Heatmap: Contingency Table Visualization
+heatmap_data <- as.data.frame(contingency_table)
+colnames(heatmap_data) <- c("Genre", "Theme", "Count")
+
+# Create the heatmap with a vibrant custom color palette
+heatmap_plot <- ggplot(heatmap_data, aes(x = Theme, y = Genre, fill = Count)) +
+  geom_tile(color = "white") +  # White borders between tiles for better distinction
+  scale_fill_gradientn(colors = c("yellow", "orange", "red", "darkred")) +  # Custom vibrant color gradient
+  labs(
+    title = "Heatmap of Genre-Theme Associations",
+    x = "Playlist Theme",
+    y = "Genre",
+    fill = "Count"
+  ) +
+  theme_minimal(base_size = 14) +  # Minimal theme for cleaner visuals
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for better readability
+    legend.position = "right",  # Place legend to the right
+    plot.title = element_text(size = 16, face = "bold"),  # Bold title for emphasis
+    axis.text = element_text(size = 12),  # Larger axis text for clarity
+    axis.title = element_text(size = 14)  # Larger axis titles
+  )
+
+agg_data <- all_data %>%
+  group_by(Theme, final_genre) %>%
+  summarise(Count = n(), .groups = 'drop')  # Count the occurrences of each genre per theme
+
+# Step 2: Normalize the counts to get proportions
+agg_data <- agg_data %>%
+  group_by(Theme) %>%
+  mutate(Proportion = Count / sum(Count))  # Calculate proportions within each theme
+
+# Step 3: Create the mosaic plot (bar plot with proportions)
+mosaic_plot <- ggplot(agg_data, aes(x = Theme, y = Proportion, fill = final_genre)) +
+  geom_bar(stat = "identity", position = "stack", color = "white") +  # Use 'identity' to plot proportions
+  scale_fill_manual(values = genre_palette) +  # Custom color palette for genres
+  labs(
+    title = "Proportion of Genres in Each Playlist Theme",
+    x = "Playlist Theme",
+    y = "Proportion",
+    fill = "Genre"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right",
+    plot.title = element_text(size = 16, face = "bold", color = "darkblue"),
+    axis.text = element_text(size = 12, color = "black"),
+    axis.title = element_text(size = 14, color = "black")
+  )
+
+
+
+mosaic_plot
+heatmap_plot
+bar_plot
+```
+## Chi-Square Test of Independence: Comparing User Playlist Genre Distribution vs. Recommendation Candidate
+
+Building on the insight that certain playlist types are more likely to contain specific genres, we further applied this understanding to assess whether a given recommendation candidate aligns with a user’s playlist genre preferences. The approach involved comparing the track genre distribution of a user’s playlists to that of a recommendation candidate using the Chi-Square Test of Independence.
+
+## Hypotheses:
+**Null Hypothesis (H0):** There is no significant difference between the genre distribution of the user’s playlists and the recommendation candidate. This means the recommendation candidate is similar to the user’s playlists in terms of genre distribution.
+
+**Alternative Hypothesis (H1):** There is a significant difference between the genre distribution of the user’s playlists and the recommendation candidate. This suggests the recommendation candidate does not align well with the user’s playlist genre preferences.
+
+## Test Procedure:
+
+1. **Genre Distribution Comparison:** We calculated the genre distribution of the user’s playlists and the recommendation candidate. A contingency table was created to represent the frequency of each genre within both the user’s playlists and the recommendation candidate.
+
+2. **Chi-Square Calculation:** The Chi-Square statistic was calculated to compare the genre distributions. If the observed and expected distributions were significantly different, this would indicate a mismatch between the user’s preferences and the recommendation candidate.
+
+3. **Hypothesis Testing:** A p-value was obtained to test the null hypothesis. If the p-value was less than 0.05, we rejected the null hypothesis, meaning the recommendation candidate did not align with the user’s playlist genre preferences, and thus would not be recommended.
+```{r}
+# Function to read playlists and prepare data for testing
+prepare_playlist_data <- function(csv_files, playlist_type) {
+  all_data <- data.frame(final_genre = character(), Theme = character(), stringsAsFactors = FALSE)
+  
+  # Loop through each CSV file (user playlists or recommended playlist)
+  for (file in csv_files) {
+    data <- read.csv(file)
+    playlist_theme <- unique(data$Type)  # All rows in a file share the same Type
+    
+    # Ensure only one theme exists per file
+    if (length(playlist_theme) != 1) {
+      stop(paste("Error: File", file, "contains multiple or no unique themes in the 'Type' column."))
+    }
+    
+    # Add the theme as a new column
+    data <- data %>%
+      select(final_genre) %>%            # Keep only the genre column
+      mutate(Theme = playlist_theme)     # Add the playlist theme as a new column
+    
+    # Append to the combined data frame
+    all_data <- rbind(all_data, data)
+  }
+  
+  # Add playlist type information (User/Recommended)
+  all_data$Playlist_Type <- playlist_type
+  return(all_data)
+}
+# 1. Read and aggregate the data for user playlists (20 files)
+user_playlist_files <- list.files(path = "/Users/ft_kiranraj/Desktop/user_playlist/", pattern = "*.csv", full.names = TRUE)
+user_data <- prepare_playlist_data(user_playlist_files, "User")
+
+# 2. Read and aggregate the recommended playlist data (1 file)
+recommended_playlist_file <- "/Users/ft_kiranraj/Desktop/recommendation_candidates/playlist_261.csv"
+recommended_data <- prepare_playlist_data(list(recommended_playlist_file), "Recommended")
+
+# 3. Combine user data and recommended data for comparison
+combined_data <- rbind(user_data, recommended_data)
+
+# 4. Create a contingency table for the Chi-Square test
+contingency_table <- table(combined_data$final_genre, combined_data$Playlist_Type)
+
+# Perform the Chi-Square Test of Independence
+chi_square_test <- chisq.test(contingency_table)
+
+# Print the hypothesis
+cat("Null Hypothesis (H0): There is no significant difference in genre distribution between user playlists and the recommended playlist.\n")
+cat("Alternative Hypothesis (H1): There is a significant difference in genre distribution between user playlists and the recommended playlist.\n\n")
+
+# Print the Chi-Square test results
+print("Chi-Square Test Results:")
+print(chi_square_test)
+
+# Interpret the p-value and print hypothesis result
+alpha <- 0.05  # Significance level (usually 0.05)
+p_value <- chi_square_test$p.value
+
+if (p_value < alpha) {
+  cat("Since the p-value (", p_value, ") is less than the significance level (", alpha, "), we reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is a significant difference in genre distribution between user playlists and the recommended playlist.\n")
+  cat("Recommendation: Do not recommend the playlist.\n")
+} else {
+  cat("Since the p-value (", p_value, ") is greater than the significance level (", alpha, "), we fail to reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is no significant difference in genre distribution between user playlists and the recommended playlist.\n")
+  cat("Recommendation: Recommend the playlist.\n")
+}
+
+# Optionally save the Chi-Square results summary to a text file
+sink("/Users/ft_kiranraj/Desktop/statsproject/chi_square_test_recommendation_results.txt")
+cat("Null Hypothesis (H0): There is no significant difference in genre distribution between user playlists and the recommended playlist.\n")
+cat("Alternative Hypothesis (H1): There is a significant difference in genre distribution between user playlists and the recommended playlist.\n\n")
+print(chi_square_test)
+
+if (p_value < alpha) {
+  cat("Since the p-value (", p_value, ") is less than the significance level (", alpha, "), we reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is a significant difference in genre distribution between user playlists and the recommended playlist.\n")
+  cat("Recommendation: Do not recommend the playlist.\n")
+} else {
+  cat("Since the p-value (", p_value, ") is greater than the significance level (", alpha, "), we fail to reject the null hypothesis.\n", sep = "")
+  cat("Conclusion: There is no significant difference in genre distribution between user playlists and the recommended playlist.\n")
+  cat("Recommendation: Recommend the playlist.\n")
+}
+sink()
+
+# Visualize the Genre Distribution for User Playlists and Recommended Playlist
+# Plot genre distribution for user playlists and the recommended playlist
+genre_palette <- colorRampPalette(RColorBrewer::brewer.pal(8, "Set3"))(length(unique(combined_data$final_genre)))
+
+# Bar plot for genre distribution across all playlists (user + recommended)
+bar_plot <- ggplot(combined_data, aes(x = Playlist_Type, fill = final_genre)) +
+  geom_bar(position = "dodge", color = "black") +  # Side-by-side bars for genres
+  scale_fill_manual(values = genre_palette) +  # Custom color palette
+  labs(
+    title = "Genre Distribution in User vs Recommended Playlist",
+    x = "Playlist Type",
+    y = "Number of Tracks"
+  ) +
+  theme_minimal(base_size = 14) +  # Improve readability with larger font size
+  theme(
+    legend.position = "right",  # Move legend to the right
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+    axis.text = element_text(size = 12),  # Increase font size for axis text
+    axis.title = element_text(size = 14),  # Increase font size for axis titles
+    plot.title = element_text(size = 16, face = "bold")  # Bold title for emphasis
+  )
+
+bar_plot
+
+```
+![](/Users/ft_kiranraj/Downloads/dont_recommend.png)
+
+## Results:
+
+Based on the Chi-Square Test results, if the p-value was greater than 0.05, we would fail to reject the null hypothesis and recommend the playlist (H0), indicating that the genre distribution of the recommendation candidate is in alignment with the user’s preferences. On the other hand, if the p-value was less than 0.05, we would reject the null hypothesis (H1) and not recommend the playlist, as it would indicate a mismatch in genre distribution.
+
+## Conclusion:
+By comparing the genre distribution of the user’s playlists with that of the recommendation candidate using the Chi-Square Test, we could assess whether the candidate aligns with the user’s musical preferences. This statistical approach helps refine the recommendation process by ensuring that the suggested playlists match the genre preferences of the user, leading to more personalized and relevant recommendations.
+
+**Conclusion of Project:**
+
+We performed descriptive and inferential statistics to analyze whether certain features like track energy, tempo, track genre affect the creation of the playlist. We also performed non-parametric tests to see if a playlist can be recommended based on user’s favorite playlists.
