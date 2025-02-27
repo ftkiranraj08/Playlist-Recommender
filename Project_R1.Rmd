@@ -1,0 +1,1197 @@
+---
+title: "Optimizing Playlist Recommendations: A Statistical and Non-Parametric Analysis of Track Popularity, Genre Diversity, and Playlist Structure"
+subtitle: "DSCC/CSC/STAT 462 Project"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+    keep_tex: true
+  html_document:
+    df_print: default
+date: "Kiran Raj Paramasivam"
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Acknowledgment of Collaboration:
+
+This project represents a collaborative effort where all team members have equally contributed to every aspect of the research, development, and execution. Each member has shared responsibilities in ideation, implementation, analysis, and documentation, ensuring the success of this endeavor through collective effort and dedication.
+
+## Introduction:
+
+In today’s world, where we are constantly faced with an overwhelming number of choices, recommender systems have become essential for simplifying decision-making and enhancing user experiences. They sift through massive amounts of data to provide personalized suggestions, whether it’s for shopping, entertainment, or music. These systems not only make it easier for users to find what they’re looking for but also help businesses increase engagement, build loyalty, and drive revenue by creating highly tailored experiences that resonate with their audience.
+
+Spotify is a great example of how recommender systems can enhance user engagement and satisfaction. By leveraging extensive datasets and advanced techniques like collaborative filtering, natural language processing, and deep learning, Spotify creates personalized playlists such as Discover Weekly and Daily Mix. These playlists analyze user preferences, listening habits, and contextual data to provide music recommendations that are not only relevant but also encourage exploration, keeping users engaged and excited.
+
+This project, “Optimizing Playlist Recommendations: A Statistical and Non-Parametric Analysis of Track Popularity, Genre Diversity, and Playlist Structure”, aims to explore what makes Spotify’s playlist recommendations so effective. By analyzing the Spotify Million Playlist Dataset (MPD), which contains over one million user-generated playlists, the project focuses on identifying patterns that define effective playlists. Specifically, it examines factors like the genres of songs, the types of tracks included, the frequency of certain songs within a playlist, and trends across multiple playlists. Through this analysis, we aim to better understand how users think when creating playlists and what elements contribute to a successful playlist.
+
+These insights provide valuable information on user behavior and preferences, which can be used to refine and improve recommendation systems. By understanding how users curate their playlists, Spotify and similar platforms can develop more intuitive systems that mirror user behavior, offering even more personalized and engaging recommendations.
+
+## 1. Dataset Overview and Preprocessing
+
+About the Dataset
+
+For this project, we used a subset of the Spotify Million Playlist Dataset (MPD), a comprehensive collection of playlist metadata organized into 1,000 JSON files, each containing details for 1,000 playlists. From this dataset, we sampled approximately 1,000 playlists for our analysis, focusing on those containing more than 5–6 tracks to ensure meaningful insights.
+
+The MPD provides extensive information at both the playlist and track levels. Playlist-level attributes include details such as playlist ID, name, number of tracks, unique artists and albums, total duration, edit history, follower count, and whether the playlist is collaborative. At the track level, the dataset includes metadata such as track name, artist, album, duration, and position within the playlist.
+
+This rich metadata enables a granular analysis of playlist characteristics and user behavior. By working with a representative subset of the MPD, we conducted a focused exploration of factors like genre diversity, track popularity, and playlist structure while maintaining computational efficiency. The insights gained contribute to understanding how playlists are created and how these patterns can improve recommendation systems.
+
+Data Preprocessing
+
+The MPD dataset is well-structured and required minimal preprocessing. Most features were clean and ready for analysis. Numerical attributes, such as track duration, were processed using standard techniques, including filling missing values with the mean of the respective feature. For categorical attributes with missing values, we opted to eliminate those entries to avoid complications during analysis.
+
+Feature Engineering
+
+While the MPD contained rich metadata, some features necessary for our analyses were missing and had to be either collected using the Spotify Web API or engineered from existing data.
+
+Data Collection via Spotify Web API: Audio features such as liveliness, tempo, danceability, and track genre were obtained by querying the Spotify Web API with track URIs. These attributes provided additional dimensions for understanding track characteristics.
+
+Playlist Genre Type Engineering: Playlist genres were not explicitly included in the dataset and had to be derived. We analyzed playlist names, generating a word cloud to identify frequently occurring terms. These terms were categorized into 20 playlist types, which were then assigned to the playlists based on their names.
+
+Track Genre Categorization: While the Spotify Web API provided all possible genres a track belonged to, for the purposes of our analysis, it was necessary to assign a single representative genre to each track. This was achieved by grouping the returned genres into broader categories.
+
+Through these preprocessing and feature engineering efforts, we enriched the dataset, enabling a more comprehensive analysis of playlists and their attributes to support the objectives of this project.
+
+![](/Users/ft_kiranraj/Downloads/WhatsApp Image 2024-12-10 at 19.40.36.jpeg)
+
+## 2. Descriptive Statistics Analysis
+
+In this part, we are trying to find more features about this dataset using descriptive statistic methods.
+
+## 2.1  Absolute and Relative Frequencies Table
+```{r}
+data <- read.csv("/Users/ft_kiranraj/Downloads/stats/Output/merged_playlists_with_counts_3.csv")
+summary(data)
+# Absolute and relative frequencies for 'genre'
+genre_freq <- table(data$final_genre)
+genre_relative_freq <- prop.table(genre_freq)
+
+genre_freq_table <- data.frame(
+  Genre = names(genre_freq),
+  Absolute = as.vector(genre_freq),
+  Relative = as.vector(genre_relative_freq)
+)
+
+print(genre_freq_table)
+
+# Absolute and relative frequencies for 'song_category'
+song_category_freq <- table(data$song_category)
+song_category_relative_freq <- prop.table(song_category_freq)
+
+song_category_freq_table <- data.frame(
+  Song_Category = names(song_category_freq),
+  Absolute = as.vector(song_category_freq),
+  Relative = as.vector(song_category_relative_freq)
+)
+
+print(song_category_freq_table)
+
+```
+The analysis highlights that Pop and Hip-Hop/Rap dominate the dataset, collectively accounting for nearly half of the playlists, reflecting their widespread appeal and prominence in user preferences. While genres like Classical, Jazz/Blues, and Punk have relatively lower representation, their inclusion indicates the dataset's diversity and ability to cater to niche audiences. Additionally, the high proportion of unique songs (90%) showcases the extensive variety in Spotify’s catalog and users’ tendency to create personalized playlists. Common songs, although a smaller fraction, likely represent universally popular tracks that appear across multiple playlists, making them key candidates for further analysis of track popularity and user engagement.
+
+## 2.2 Absolute Barplots
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Group data by genre, artist, and track, counting their occurrences
+genre_artist_count <- data %>%
+  group_by(final_genre, artist_name, track_name) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  arrange(desc(Count))
+
+# Find the top artist for each genre (with the most appearances)
+top_artist_per_genre <- genre_artist_count %>%
+  group_by(final_genre) %>%
+  slice_max(Count, n = 1) %>%  # Select the artist with the highest count per genre
+  ungroup()
+print(top_artist_per_genre)
+# Prepare labels for the y-axis (Genre, Artist, and Song)
+y_labels <- paste(
+  top_artist_per_genre$artist_name
+)
+
+# Set custom margins to avoid overlap with the legend
+par(mar = c(6, 8, 4, 4))  # Adjust margins (bottom, left, top, right)
+
+unique_genres <- unique(top_artist_per_genre$final_genre)
+genre_colors <- hcl.colors(length(unique_genres), palette = "Set2")  
+
+# Assign each bar a color based on its genre
+genre_color_map <- setNames(genre_colors, unique_genres)
+bar_colors <- genre_color_map[top_artist_per_genre$final_genre]
+
+# Create a horizontal barplot with genre-specific colors
+bp <- barplot(
+  top_artist_per_genre$Count,
+  names.arg = y_labels,
+  horiz = TRUE,
+  col = bar_colors,  # Genre-specific colors
+  main = "Top Artist for Each Genre with Most-Played Song",
+  xlab = "Number of Appearances",
+  border = "black",         
+  las = 1,                  
+  cex.names = 0.8,          
+  space = 1.5              
+)
+
+# Create a legend with genres and their respective colors
+legend_labels <- unique(top_artist_per_genre$final_genre)
+
+# Add a legend at the top-right of the plot (adjusted position)
+legend(
+  "bottomright",                      
+  legend = legend_labels,          
+  fill = genre_colors,             
+  border = "white",                
+  title = "Genres",
+  cex = 0.25,                       
+  bty = "n"                        
+)
+
+```
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Group data by genre, artist, and track, counting their occurrences
+genre_artist_count <- data %>%
+  group_by(final_genre, artist_name, track_name) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  arrange(desc(Count))
+
+# Find the top track for each genre (with the most appearances)
+top_track_per_genre <- genre_artist_count %>%
+  group_by(final_genre) %>%
+  slice_max(Count, n = 1) %>%  # Select the track with the highest count per genre
+  ungroup()
+
+# Prepare labels for the y-axis (Genre and Song)
+y_labels <- paste(
+  top_track_per_genre$track_name     # Song name
+)
+
+# Set custom margins to avoid overlap with the legend
+par(mar = c(6, 17, 4, 2))  # Adjust margins (bottom, left, top, right)
+
+# Generate a color palette for genres using hcl.colors 
+unique_genres <- unique(top_track_per_genre$final_genre)
+genre_colors <- hcl.colors(length(unique_genres), palette = "Set2")  
+
+# Assign each bar a color based on its genre
+genre_color_map <- setNames(genre_colors, unique_genres)
+bar_colors <- genre_color_map[top_track_per_genre$final_genre]
+
+# Create a horizontal barplot with genre-specific colors
+bp <- barplot(
+  top_track_per_genre$Count,
+  names.arg = y_labels,
+  horiz = TRUE,
+  col = bar_colors,  
+  main = "Top Track for Each Genre",
+  xlab = "Number of Appearances",
+  border = "black",         
+  las = 1,                  
+  cex.names = 0.8,          
+  space = 1.5               
+)
+
+# Create a legend with genres and their respective colors
+legend_labels <- unique(top_track_per_genre$final_genre)
+
+legend(
+  "bottomright",                   
+  legend = legend_labels,          
+  fill = genre_colors,             
+  border = "white",                
+  title = "Genres",
+  cex = 0.2,                       
+  bty = "n"                        
+)
+
+```
+Based on the results, it’s clear that recommendation systems are heavily influenced by the popularity of both the artist and the genre. Songs by top-charting artists like Drake and The Chainsmokers, who have frequent plays across genres such as hip-hop/rap and pop, are highly likely to be recommended in playlists due to their high user engagement. This suggests that popular artists dominate playlist recommendations, and not only their top tracks but also other songs from their catalog are likely to appear. Genres like pop and hip-hop/rap benefit from this trend, as they contain many highly played songs, further reinforcing their presence in recommended playlists.
+
+## 2.3 Side-by-Side Boxplot
+```{r}
+# Create categories for popularity based on playlist_count
+data$popularity_category <- cut(data$playlist_count,
+                                breaks = c(0, 5, 9, max(data$playlist_count, na.rm = TRUE)),
+                                labels = c("Low", "Medium", "High"),
+                                include.lowest = TRUE)
+
+# Create an absolute frequency table for the popularity categories
+popularity_freq_table <- table(data$popularity_category)
+
+# Print the frequency table
+print(popularity_freq_table)
+
+# Load necessary library
+library(ggplot2)
+
+# Create categories for popularity based on playlist_count (e.g., Low, Medium, High)
+data$popularity_category <- cut(data$playlist_count,
+                                breaks = c(0, 5, 9, max(data$playlist_count, na.rm = TRUE)),
+                                labels = c("Low", "Medium", "High"),
+                                include.lowest = TRUE)
+
+# Create a boxplot for 'danceability' vs 'popularity_category'
+ggplot(data, aes(x = popularity_category, y = danceability, fill = popularity_category)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("Low Popularity", "Medium Popularity", "High Popularity")) +
+  labs(title = "Danceability vs Popularity",
+       x = "Popularity Category",
+       y = "Danceability") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Create a boxplot for 'energy' vs 'popularity_category'
+ggplot(data, aes(x = popularity_category, y = energy, fill = popularity_category)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("Low Popularity", "Medium Popularity", "High Popularity")) +
+  labs(title = "Energy vs Popularity",
+       x = "Popularity Category",
+       y = "Energy") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+The side-by-side boxplots reveal that songs with higher energy and danceability are more likely to fall into the high popularity category, as indicated by their higher median values for both attributes. Songs in the low and medium popularity categories show more variability in these factors. The high popularity group has a more consistent and concentrated range of energy and danceability, suggesting that curators prefer songs with these traits. Outliers in the high-popularity group indicate a few exceptionally energetic or danceable tracks that stand out even further. Overall, songs with greater energy and danceability are more likely to be included in popular playlists.
+
+## 2.4 Scatter Plots
+
+We hold the view that specific characteristics, such as loudness, energy, danceability, and tempo, may exhibit notable similarities to varying extents. The subsequent scatter plots reveal a strong correlation between loudness and energy.
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(gridExtra)
+# Assuming your data is in a dataframe called 'data'
+# Scatter Plot 1: Loudness vs Energy
+plot1 <- ggplot(data, aes(x = loudness, y = energy)) +
+  geom_point(color = "blue") +
+  labs(title = "Loudness vs Energy", x = "Loudness", y = "Energy") +
+  theme_minimal()
+
+# Scatter Plot 2: Loudness vs Tempo
+plot2 <- ggplot(data, aes(x = loudness, y = tempo)) +
+  geom_point(color = "red") +
+  labs(title = "Loudness vs Tempo", x = "Loudness", y = "Tempo") +
+  theme_minimal()
+
+# Scatter Plot 3: Loudness vs Danceability
+plot3 <- ggplot(data, aes(x = loudness, y = danceability)) +
+  geom_point(color = "green") +
+  labs(title = "Loudness vs Danceability", x = "Loudness", y = "Danceability") +
+  theme_minimal()
+
+# Scatter Plot 4: Danceability vs Energy
+plot4 <- ggplot(data, aes(x = danceability, y = energy)) +
+  geom_point(color = "purple") +
+  labs(title = "Danceability vs Energy", x = "Danceability", y = "Energy") +
+  theme_minimal()
+
+# Scatter Plot 5: Danceability vs Tempo
+plot5 <- ggplot(data, aes(x = danceability, y = tempo)) +
+  geom_point(color = "orange") +
+  labs(title = "Danceability vs Tempo", x = "Danceability", y = "Tempo") +
+  theme_minimal()
+
+# Scatter Plot 6: Energy vs Tempo
+plot6 <- ggplot(data, aes(x = energy, y = tempo)) +
+  geom_point(color = "brown") +
+  labs(title = "Energy vs Tempo", x = "Energy", y = "Tempo") +
+  theme_minimal()
+grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, ncol = 3, nrow = 2)
+```
+
+## 2.5 Center & Dispersion of Popularity with Histograms
+
+Several attributes are believed to influence popularity. While some of these may be biased, they can be adjusted by transformations for use in subsequent analyses.
+```{r}
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+stats <- data %>%
+  summarise(
+    liveness_mean = mean(liveness, na.rm = TRUE),
+    liveness_median = median(liveness, na.rm = TRUE),
+    liveness_mode = getmode(liveness),
+    
+    energy_mean = mean(energy, na.rm = TRUE),
+    energy_median = median(energy, na.rm = TRUE),
+    energy_mode = getmode(energy),
+    
+    danceability_mean = mean(danceability, na.rm = TRUE),
+    danceability_median = median(danceability, na.rm = TRUE),
+    danceability_mode = getmode(danceability),
+    
+    acousticness_mean = mean(acousticness, na.rm = TRUE),
+    acousticness_median = median(acousticness, na.rm = TRUE),
+    acousticness_mode = getmode(acousticness),
+    
+    tempo_mean = mean(tempo, na.rm = TRUE),
+    tempo_median = median(tempo, na.rm = TRUE),
+    tempo_mode = getmode(tempo),
+    
+    valence_mean = mean(valence, na.rm = TRUE),
+    valence_median = median(valence, na.rm = TRUE),
+    valence_mode = getmode(valence),
+    
+    duration_ms_mean = mean(duration_ms, na.rm = TRUE),
+    duration_ms_median = median(duration_ms, na.rm = TRUE),
+    duration_ms_mode = getmode(duration_ms),
+    
+    instrumentalness_mean = mean(instrumentalness, na.rm = TRUE),
+    instrumentalness_median = median(instrumentalness, na.rm = TRUE),
+    instrumentalness_mode = getmode(instrumentalness)
+  )
+plot1 <- ggplot(data, aes(x = liveness)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Liveness", x = "Liveness", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$liveness_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$liveness_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$liveness_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 0.8, y = 4000, label = paste("Mean:", round(stats$liveness_mean, 2)), color = "black") +
+  annotate("text", x = 0.8, y = 3000, label = paste("Median:", round(stats$liveness_median, 2)), color = "black") +
+  annotate("text", x = 0.8, y = 2000, label = paste("Mode:", stats$liveness_mode), color = "black")
+plot1
+IQR(data$liveness)
+var(data$liveness)
+sd(data$liveness)/mean(data$liveness)
+library(moments)
+skewness(data$liveness)
+```
+The data on liveness reveals a mean of 0.19, a median of 0.13, and a mode of 0.104. Additionally with an interquartile range (IQR) of 0.1508. The variance stands at 0.02578308, while the coefficient of variance is 0.8339184, and the skewness is measured at 2.181961.
+```{r}
+# Histogram for energy
+plot2 <- ggplot(data, aes(x = energy)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Energy", x = "Energy", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$energy_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$energy_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$energy_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 0.25, y = 700, label = paste("Mean:", round(stats$energy_mean, 2)), color = "red") +
+  annotate("text", x = 0.25, y = 850, label = paste("Median:", round(stats$energy_median, 2)), color = "blue") +
+  annotate("text", x = 0.25, y = 1000, label = paste("Mode:", stats$energy_mode), color = "purple")
+plot2
+IQR(data$energy)
+var(data$energy)
+sd(data$energy)/mean(data$energy)
+library(moments)
+skewness(data$energy)
+```
+The data on Energy reveals a mean of 0.63, a median of 0.66, and a mode of 0.713. Additionally with an interquartile range (IQR) of 0.308. The variance stands at 0.04536811, while the coefficient of variance is 0.33759, and the skewness is measured at -0.572808715.
+```{r}
+# Histogram for danceability
+plot3 <- ggplot(data, aes(x = danceability)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Danceability", x = "Danceability", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$danceability_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$danceability_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$danceability_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 0.9, y = 500, label = paste("Mean:", round(stats$danceability_mean, 2)), color = "red") +
+  annotate("text", x = 0.9, y = 750, label = paste("Median:", round(stats$danceability_median, 2)), color = "blue") +
+  annotate("text", x = 0.9, y = 1000, label = paste("Mode:", stats$danceability_mode), color = "purple")
+plot3 
+IQR(data$danceability)
+var(data$danceability)
+sd(data$danceability)/mean(data$danceability)
+library(moments)
+skewness(data$danceability)
+```
+The data on Danceability reveals a mean of 0.61, a median of 0.62, and a mode of 0.542. Additionally with an interquartile range (IQR) of 0.219. The variance stands at 0.02576561, while the coefficient of variance is 0.263991, and the skewness is measured at -0.3649189.
+```{r}
+# Histogram for acousticness
+plot4 <- ggplot(data, aes(x = acousticness)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Acousticness", x = "Acousticness", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$acousticness_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$acousticness_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$acousticness_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 0.8, y = 1000, label = paste("Mean:", round(stats$acousticness_mean, 2)), color = "red") +
+  annotate("text", x = 0.8, y = 2000, label = paste("Median:", round(stats$acousticness_median, 2)), color = "blue") +
+  annotate("text", x = 0.8, y = 3000, label = paste("Mode:", stats$acousticness_mode), color = "purple")
+plot4 
+IQR(data$acousticness)
+var(data$acousticness)
+sd(data$acousticness)/mean(data$acousticness)
+library(moments)
+skewness(data$acousticness)
+```
+The data on Acousticness reveals a mean of 0.26, a median of 0.12, and a mode of 0.103. Additionally with an interquartile range (IQR) of 0.3965. The variance stands at 0.08503212, while the coefficient of variance is 1.131319, and the skewness is measured at 1.103513.
+```{r}
+# Histogram for tempo
+plot5 <- ggplot(data, aes(x = tempo)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Tempo", x = "Tempo", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$tempo_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$tempo_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$tempo_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 200, y = 1500, label = paste("Mean:", round(stats$tempo_mean, 2)), color = "red") +
+  annotate("text", x = 200, y = 1250, label = paste("Median:", round(stats$tempo_median, 2)), color = "blue") +
+  annotate("text", x = 200, y = 1000, label = paste("Mode:", stats$tempo_mode), color = "purple")
+plot5
+IQR(data$tempo)
+var(data$tempo)
+sd(data$tempo)/mean(data$tempo)
+library(moments)
+skewness(data$tempo)
+```
+The data on Tempo reveals a mean of 120.9, a median of 120.01, and a mode of 100.033. Additionally with an interquartile range (IQR) of 41.07225. The variance stands at 825.1358, while the coefficient of variance is 0.2375979, and the skewness is measured at 0.361085.
+```{r}
+# Histogram for valence
+plot6 <- ggplot(data, aes(x = valence)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Valence", x = "Valence", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$valence_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$valence_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$valence_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 0.8, y = 800, label = paste("Mean:", round(stats$valence_mean, 2)), color = "red") +
+  annotate("text", x = 0.8, y = 750, label = paste("Median:", round(stats$valence_median, 2)), color = "blue") +
+  annotate("text", x = 0.8, y = 700, label = paste("Mode:", stats$valence_mode), color = "purple")
+plot6
+IQR(data$valence)
+var(data$valence)
+sd(data$valence)/mean(data$valence)
+library(moments)
+skewness(data$valence)
+```
+The data on Valence reveals a mean of 0.5, a median of 0.49, and a mode of 0.497. Additionally with an interquartile range (IQR) of 0.37125. The variance stands at 0.0559012, while the coefficient of variance is 0.4739118, and the skewness is measured at 0.08034221.
+```{r}
+# Histogram for duration_ms
+plot7 <- ggplot(data, aes(x = duration_ms)) +
+  geom_histogram(bins = 30, fill = "yellow", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Duration (ms)", x = "Duration (ms)", y = "Frequency") +
+  theme_minimal() +
+  geom_vline(xintercept = stats$duration_ms_mean, color = "red", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$duration_ms_median, color = "blue", linetype = "solid", size = 1.2, alpha = 0.7) +
+  geom_vline(xintercept = stats$duration_ms_mode, color = "purple", linetype = "solid", size = 1.2, alpha = 0.7) +
+  annotate("text", x = 1e6, y = 5000, label = paste("Mean:", round(stats$duration_ms_mean, 2)), color = "red") +
+  annotate("text", x = 1e6, y = 3000, label = paste("Median:", round(stats$duration_ms_median, 2)), color = "blue") +
+  annotate("text", x = 1e6, y = 4000, label = paste("Mode:", stats$duration_ms_mode), color = "purple")
+plot7
+IQR(data$duration_ms)
+var(data$duration_ms)
+sd(data$duration_ms)/mean(data$duration_ms)
+library(moments)
+skewness(data$duration_ms)
+```
+The data on Duration_ms reveals a mean of 233179.75, a median of 224860, and a mode of 219320. Additionally with an interquartile range (IQR) of 59667. The variance stands at 4567841519, while the coefficient of variance is 0.2898443, and the skewness is measured at 3.3423.
+
+## 2.6 Quantile Plots
+The aforementioned data set comprises a range of variables. In this project, our primary emphasis will be on the following parameters: ‘acousticness’, ‘danceability’, ‘duration_ms’, ‘liveness’, ‘energy’, and ‘tempo’. We will now proceed to examine these parameters utilizing Quantile-Quantile (QQ) plots.
+```{r}
+# Load necessary library
+library(ggplot2)
+
+# Function to create QQ plots for a given variable
+create_qq_plot <- function(data, variable, title) {
+  ggplot(data, aes(sample = !!sym(variable))) +
+    stat_qq() +
+    stat_qq_line(color = "blue") +
+    labs(title = title, x = "Theoretical Quantiles", y = "Sample Quantiles") +
+    theme_minimal()
+}
+
+# Create QQ plots for all required variables
+qq1 <- create_qq_plot(data, "acousticness", "QQ Plot: Acousticness")
+qq2 <- create_qq_plot(data, "danceability", "QQ Plot: Danceability")
+qq3 <- create_qq_plot(data, "duration_ms", "QQ Plot: Duration (ms)")
+qq4 <- create_qq_plot(data, "liveness", "QQ Plot: Liveness")
+qq5 <- create_qq_plot(data, "energy", "QQ Plot: Energy")
+qq6 <- create_qq_plot(data, "tempo", "QQ Plot: Tempo")
+
+# Arrange all plots in a grid layout
+library(gridExtra)
+grid.arrange(qq1, qq2, qq3, qq4, qq5, qq6, ncol = 3)
+
+```
+Danceability, energy, and tempo approximately follow a normal distribution, as observed from the QQ plots. However, acousticness, duration_ms, and liveness deviate significantly from normality, indicating a need for transformation to improve playlist recommendation accuracy.
+
+## 2.7 Box-Cox Transformations
+
+```{r}
+library(MASS) # For the boxcox() function
+
+transform_and_plot <- function(df, column_name) {
+  # Exclude non-positive values
+  positive_data <- df[[column_name]][df[[column_name]] > 0]
+  
+  # Perform Box-Cox transformation and find the optimal lambda
+  bc_result <- boxcox(positive_data ~ 1, plot = FALSE)  # Perform Box-Cox transformation
+  lambda <- bc_result$x[which.max(bc_result$y)]  # Get the optimal lambda
+  
+  # Check if lambda is successfully computed
+  if (is.null(lambda)) {
+    stop("Box-Cox transformation did not find a valid lambda value.")
+  }
+  
+  # Apply the Box-Cox transformation
+  if (lambda == 0) {
+    transformed_data <- log(positive_data)  # Apply log if lambda = 0
+  } else {
+    transformed_data <- (positive_data^lambda - 1) / lambda  # Apply Box-Cox transformation
+  }
+  
+  # Create new QQ plots
+  qqnorm(transformed_data, main = paste("QQ Plot of Box-Cox Transformed", column_name))
+  qqline(transformed_data, col = "red")
+}
+
+# Example usage:
+# Replace `data` with your actual data frame and `duration_ms` with your column name
+transform_and_plot(data, "duration_ms")
+transform_and_plot(data, "acousticness")
+transform_and_plot(data, "liveness")
+```
+In a playlist recommendation system, features like danceability, energy, and tempo roughly follow a normal distribution, as observed in the QQ plots, suggesting they can be directly used in statistical tests like Chi-squared test of independence, Mann-Whitney U test, and Kruskal-Wallis test. However, acousticness, duration_ms, and liveness deviate significantly from normality, which may affect the reliability of these tests. To address this, applying appropriate transformations (e.g., Box-Cox) to these skewed features can help normalize their distributions. This ensures that statistical tests comparing user playlist distributions across different genres are more accurate, ultimately improving the decision-making process for suggesting new playlists based on genre preferences.
+
+## 3. Infrential Statistics Analysis
+
+## 3.1. Inference about Means (confidence interval)
+
+Calculating confidence intervals for three song characteristics: acousticness, danceability, and liveness. These confidence intervals help estimate the range in which the true mean values of these attributes lie with a 95% level of confidence.
+
+```{r}
+# Acousticness Confidence Interval
+if ("acousticness" %in% colnames(data)) {
+  acousticness_confidence_interval <- t.test(data$acousticness, conf.level = 0.95)
+} else {
+  stop("Error: 'acousticness' column not found in the dataset.")
+}
+
+# Danceability Confidence Interval
+if ("danceability" %in% colnames(data)) {
+  danceability_confidence_interval <- t.test(data$danceability, conf.level = 0.95)
+} else {
+  stop("Error: 'danceability' column not found in the dataset.")
+}
+
+# Liveness Transformation and Confidence Interval
+if ("liveness" %in% colnames(data)) {
+  liveness_positive <- data$liveness[data$liveness > 0]
+  if (length(liveness_positive) > 0) {
+    lambda_liveness <- 0.5  # Default lambda value for transformation
+    transformed_liveness <- (liveness_positive^lambda_liveness - 1) / lambda_liveness
+
+    # Confidence Interval for Transformed Liveness
+    liveness_confidence_interval <- t.test(transformed_liveness, conf.level = 0.95)
+  } else {
+    stop("Error: No positive values found in 'liveness' column.")
+  }
+} else {
+  stop("Error: 'liveness' column not found in the dataset.")
+}
+
+# Print Results
+cat("Acousticness Confidence Interval:\n")
+print(acousticness_confidence_interval)
+
+cat("\nDanceability Confidence Interval:\n")
+print(danceability_confidence_interval)
+
+cat("\nLiveness Confidence Interval:\n")
+print(liveness_confidence_interval)
+```
+
+
+The results of the confidence interval analysis provide insights into the typical characteristics of songs in the dataset. For acousticness, the 95% confidence interval (0.2534, 0.2622) indicates a moderate mean of 0.2578, suggesting a balance between acoustic and electronic elements in the songs. The danceability confidence interval (0.6056, 0.6105) highlights a high mean of 0.6080, reflecting that most songs in the dataset are designed for rhythmic movement or dancing. Finally, for liveness, after applying a transformation to address skewness, the confidence interval (-1.1826, -1.1733) reveals a mean of -1.1779, providing evidence of relatively low levels of live performance characteristics among these songs. These findings collectively showcase key aspects of song features relevant to their popularity and categorization.
+
+
+## 3.2.Inference about Variance (confidence interval)
+
+The purpose of this code is to perform inferential statistical analysis on a dataset of song attributes. It calculates confidence intervals for key song features such as acousticness, danceability, and liveness, and it also estimates the variance of the tempo attribute with a 95% confidence interval. The code ensures that all necessary columns are present in the dataset and handles missing or invalid data gracefully by raising errors when required. For the liveness attribute, a transformation is applied to stabilize variance before calculating its confidence interval. This approach allows for a robust statistical evaluation of the dataset's characteristics, providing insights into the central tendencies and variability of the musical attributes.
+
+```{r}
+# Acousticness Confidence Interval
+if ("acousticness" %in% colnames(data)) {
+  acousticness_confidence_interval <- t.test(data$acousticness, conf.level = 0.95)
+} else {
+  stop("Error: 'acousticness' column not found in the dataset.")
+}
+
+# Danceability Confidence Interval
+if ("danceability" %in% colnames(data)) {
+  danceability_confidence_interval <- t.test(data$danceability, conf.level = 0.95)
+} else {
+  stop("Error: 'danceability' column not found in the dataset.")
+}
+
+# Liveness Transformation and Confidence Interval
+if ("liveness" %in% colnames(data)) {
+  liveness_positive <- data$liveness[data$liveness > 0]
+  if (length(liveness_positive) > 0) {
+    lambda_liveness <- 0.5  # Default lambda value for transformation
+    transformed_liveness <- (liveness_positive^lambda_liveness - 1) / lambda_liveness
+
+    # Confidence Interval for Transformed Liveness
+    liveness_confidence_interval <- t.test(transformed_liveness, conf.level = 0.95)
+  } else {
+    stop("Error: No positive values found in 'liveness' column.")
+  }
+} else {
+  stop("Error: 'liveness' column not found in the dataset.")
+}
+
+# Variance Inference for Tempo
+if ("tempo" %in% colnames(data)) {
+  tempo <- data$tempo
+  n_tempo <- length(tempo)
+  var_tempo <- var(tempo, na.rm = TRUE)
+
+  # 95% Confidence Interval for Variance
+  alpha <- 0.05
+  chi2_lower <- qchisq(alpha / 2, df = n_tempo - 1)
+  chi2_upper <- qchisq(1 - alpha / 2, df = n_tempo - 1)
+  ci_variance_tempo <- c((n_tempo - 1) * var_tempo / chi2_upper, (n_tempo - 1) * var_tempo / chi2_lower)
+
+  cat("\nTempo Variance:", var_tempo, "\n")
+  cat("95% Confidence Interval for Variance:\n")
+  print(ci_variance_tempo)
+} else {
+  stop("Error: 'tempo' column not found in the dataset.")
+}
+
+# Print Results
+cat("Acousticness Confidence Interval:\n")
+print(acousticness_confidence_interval)
+
+cat("\nDanceability Confidence Interval:\n")
+print(danceability_confidence_interval)
+
+cat("\nLiveness Confidence Interval:\n")
+print(liveness_confidence_interval)
+
+```
+
+The analysis provides an in-depth statistical overview of the characteristics of songs in the dataset, focusing on variance and central tendencies. The tempo variance is 825.14, with a 95% confidence interval of (807.79, 843.04), indicating variability in song tempo. For acousticness, the confidence interval (0.2534, 0.2622) reflects a moderate mean of 0.2578, showing a balance between acoustic and electronic elements. The danceability analysis reveals a high mean of 0.6080 with a narrow confidence interval (0.6056, 0.6105), suggesting most songs are rhythmically inclined for dancing. After applying a transformation to stabilize variance, the liveness confidence interval (-1.1826, -1.1733) indicates low live performance characteristics, with a mean of -1.1779. Additionally, the group-by aggregation identifies the most frequently appearing artist and track for each genre, offering insights into genre-specific dominance by artists. This comprehensive analysis highlights variability and trends in musical attributes and artist influence across genres.
+
+
+We have also done the Mann-Witney U test in the extension of the project section.
+
+## 3.3. Inference about Single Proportion (confidence interval)
+
+The purpose of this proportion test is to estimate the proportion of songs in the dataset that belong to a specific genre (in this case, `"hip_hop_rap"`) and to assess the confidence we have in this estimate. By calculating a 95% confidence interval, we determine a range of values within which the true proportion of `"hip_hop_rap"` songs in the population is likely to fall. This analysis helps evaluate whether this genre constitutes a significant portion of the dataset and provides a statistical basis for understanding its representation. The confidence interval also allows us to infer the variability of this estimate and ensures that decisions or conclusions based on this proportion are supported by robust statistical evidence.
+
+```{r}
+# Proportion Test for Final Genre: hip_hop_rap
+if ("final_genre" %in% colnames(data)) {
+  target_genre <- "hip_hop_rap"
+  
+  # Calculate the total number of songs and the count for the target genre
+  total_songs <- nrow(data)
+  target_genre_count <- sum(data$final_genre == target_genre)
+  
+  # Proportion of the target genre
+  proportion <- target_genre_count / total_songs
+  
+  # 95% Confidence Interval for the proportion
+  alpha <- 0.05
+  z_score <- qnorm(1 - alpha / 2)
+  standard_error <- sqrt(proportion * (1 - proportion) / total_songs)
+  
+  ci_low <- proportion - z_score * standard_error
+  ci_high <- proportion + z_score * standard_error
+  
+  # Output in the desired format
+  cat("Proportion Test for Final Genre:", target_genre, "\n")
+  cat("\nOne Sample Proportion Test\n\n")
+  cat("data: final_genre == ", target_genre, "\n", sep = "")
+  cat("z =", round(proportion / standard_error, 2), ", ",
+      "n =", total_songs, ", ",
+      "p-value <", ifelse(proportion < 1e-16, "2.2e-16", proportion), "\n")
+  cat("alternative hypothesis: true proportion is not equal to 0\n")
+  cat("95 percent confidence interval:\n")
+  cat(" ", round(ci_low, 6), " ", round(ci_high, 6), "\n")
+  cat("sample estimates:\n")
+  cat("proportion of", target_genre, ":", round(proportion, 6), "\n")
+} else {
+  stop("Error: 'final_genre' column not found in the dataset.")
+}
+
+```
+
+the proportion test for the genre "hip_hop_rap" reveals that approximately 21.64% of the songs in the dataset belong to this genre, with a 95% confidence interval of [21.02%, 22.26%]. This indicates a substantial representation of this genre in the dataset. The test statistic (z = 68.21) and the significant p-value confirm that the proportion is statistically distinguishable from zero, reinforcing the prominence of "hip_hop_rap" in the dataset.
+
+
+## 3.4. Inference about Two Proportion (confidence interval)
+
+
+The purpose of the two-proportion test in the provided R code is to compare the proportions of songs belonging to two different genres (e.g., "hip_hop_rap" and "pop") in the dataset. It calculates the difference between these two proportions and computes a 95% confidence interval for that difference. This test helps to assess whether the proportion of songs in one genre is significantly different from the proportion in another genre. By calculating the confidence interval, the test provides a range of values for the difference in proportions, allowing us to infer whether the observed difference could be due to random variation or if it reflects a true disparity between the genres in the dataset.
+
+```{r}
+# Two Proportion Test: Comparison between two groups
+if ("final_genre" %in% colnames(data)) {
+  # Define the two groups
+  group1 <- "hip_hop_rap"
+  group2 <- "pop"
+
+  # Count successes (e.g., number of songs in each genre)
+  count1 <- sum(data$final_genre == group1)
+  count2 <- sum(data$final_genre == group2)
+
+  # Total observations in each group
+  n1 <- sum(data$final_genre %in% c(group1, group2)) # Includes only relevant observations
+  n2 <- n1  # Assuming equal sample size (adjust if needed)
+
+  # Proportions
+  p1 <- count1 / n1
+  p2 <- count2 / n2
+
+  # Difference in proportions
+  prop_diff <- p1 - p2
+
+  # Standard error
+  se_diff <- sqrt((p1 * (1 - p1) / n1) + (p2 * (1 - p2) / n2))
+
+  # Z-score for 95% confidence
+  z_score <- qnorm(0.975)
+
+  # Confidence interval
+  ci_low <- prop_diff - z_score * se_diff
+  ci_high <- prop_diff + z_score * se_diff
+
+  # Output
+  cat("Two Proportion Test: Comparison between", group1, "and", group2, "\n\n")
+  cat("Proportion Difference (p1 - p2):", round(prop_diff, 4), "\n")
+  cat("95 percent confidence interval:\n")
+  cat(" ", round(ci_low, 6), " ", round(ci_high, 6), "\n")
+  cat("Proportion of", group1, ":", round(p1, 6), "\n")
+  cat("Proportion of", group2, ":", round(p2, 6), "\n")
+} else {
+  stop("Error: 'final_genre' column not found in the dataset.")
+}
+
+```
+
+The two-proportion test compares the proportions of songs in the hip_hop_rap and pop genres within the dataset. The proportion of songs in hip_hop_rap is approximately 44.72%, while the proportion in pop is around 55.28%. The difference in proportions between the two genres is -0.1056, indicating that the proportion of pop songs is higher than that of hip_hop_rap by approximately 10.56%. The 95% confidence interval for this difference is [-0.1209, -0.0903], which does not include zero, suggesting that the difference in proportions is statistically significant. This means we can be confident that there is a true difference between the two genres in terms of their representation in the dataset, with pop songs making up a larger proportion than hip_hop_rap songs.
+
+## 3.5. Chi-Square(Test of Independence)
+
+We have done this test in our extension of the project section.
+
+## 3.6. ANOVA
+
+We have done the kruskal-Wallis test(non parametric one-way ANOVA) in our extension of the project section.
+
+
+## 3.7. Inference about correlation (hypothesis test)
+
+As you can see from the scatterplot above between danceability and energy, there is a positive linear relationship between them.
+
+The purpose of the Pearson correlation hypothesis test is to determine whether there is a statistically significant linear relationship between two continuous variables. By testing the correlation, such as between danceability and energy, the test evaluates if changes in one variable are associated with changes in the other. The Pearson correlation coefficient (r) measures the strength and direction of this relationship, and a significant p-value (typically < 0.05) suggests a meaningful linear relationship between the variables, leading to the rejection of the null hypothesis (ρ = 0).
+
+```{r}
+# Hypothesis Test for Correlation between two continuous variables (e.g., "danceability" and "energy")
+if ("danceability" %in% colnames(data) && "energy" %in% colnames(data)) {
+  
+  # Calculate the Pearson correlation coefficient
+  correlation_test <- cor.test(data$danceability, data$energy)
+  
+  # Output the results
+  cat("Hypothesis Test for Correlation between Danceability and Energy\n\n")
+  cat("Pearson's correlation coefficient:", round(correlation_test$estimate, 4), "\n")
+  cat("t-value:", round(correlation_test$statistic, 4), "\n")
+  cat("Degrees of freedom:", correlation_test$parameter, "\n")
+  cat("p-value:", round(correlation_test$p.value, 4), "\n")
+  cat("Alternative hypothesis:", correlation_test$alternative, "\n")
+  
+  # Confidence interval for the correlation coefficient
+  cat("95% Confidence Interval for Correlation Coefficient:\n")
+  cat("(", round(correlation_test$conf.int[1], 4), ", ", round(correlation_test$conf.int[2], 4), ")\n")
+} else {
+  stop("Error: 'danceability' and/or 'energy' columns not found in the dataset.")
+}
+```
+
+The hypothesis test for the correlation between danceability and energy reveals a Pearson's correlation coefficient of 0.1494, indicating a small positive linear relationship between these two variables. The t-value is 19.6107, with 16846 degrees of freedom, and the p-value is 0, which is much smaller than the commonly used significance level of 0.05. This suggests that the observed correlation is statistically significant. The 95% confidence interval for the correlation coefficient is [0.1346, 0.1641], meaning we are 95% confident that the true correlation in the population lies within this range. Given the significant p-value, we reject the null hypothesis and conclude that there is a statistically significant positive correlation between danceability and energy in the dataset.
+
+
+## 3.8. Regression
+
+This multiple linear regression model helps predict the energy of a song based on its acousticness, loudness, and valence. By using these three features, we can understand how each one contributes to the energy level of the song. The significant p-values indicate that all the predictors have a meaningful relationship with the energy level. The R-squared value suggests that these features explain a large proportion of the variation in the energy of the songs in the dataset.
+
+```{r}
+  model <- lm(energy ~ acousticness + loudness + valence, data = data)
+  summary(model)
+```
+
+The Multiple R-squared value is 0.7062, suggesting that approximately 70.62% of the variance in energy is explained by the predictors (acousticness, loudness, and valence). The Adjusted R-squared of 0.7061 accounts for the number of predictors, providing a slightly adjusted measure of fit. The F-statistic of 13,490 with a p-value of < 2.2e-16 indicates that the overall model is highly significant and explains a substantial amount of the variance in energy.
+
+Overall, the model shows that acousticness negatively affects energy, while loudness and valence have positive effects, and all predictors are highly significant in explaining the variation in energy.
+
+## Building a Simple Recommender System
+
+Building on the insights from descriptive and inferential statistics, we aimed to extend our project by developing a simple recommender system. The goal was to explore how a playlist could be recommended to a user based on their existing playlists, with a focus on testing various characteristics of playlists. For simplicity, we sampled 20 user playlists in addition to the ones used for analysis, alongside one recommendation candidate playlist, to simulate a scenario where the system must compare the candidate with a user’s playlist preferences.
+
+## We assumed the following premise for this extension:
+
+Premise: We have access to 20 user-created playlists and one recommendation candidate playlist. We perform a series of three tests to evaluate whether the recommendation candidate should be recommended based on the characteristics of the user’s playlists. These tests focus on comparing aspects such as genre diversity, track popularity, and playlist structure. Each test is conducted by comparing the candidate playlist to the 20 user playlists to determine if it aligns well with the user’s preferences.
+
+It’s important to clarify that the goal of this extension is not to combine the results of these tests into a final recommendation, but rather to assess whether the recommendation candidate is a good match for the user based on the individual test results. Below is a breakdown of the three tests:
+
+### Analyzing Danceability Levels Across Playlist Types
+
+## Objective
+ 
+The main objective of this study is to assess whether significant variations exist in the danceability levels among different types of playlists. Understanding these variations can help streaming services enhance user engagement by tailoring playlists to match the rhythmic and danceable qualities that certain listener groups prefer.
+ 
+## Statistical Analysis
+ 
+**Kruskal-Wallis H Test:**
+
+**Overview:*** This non-parametric test is employed to evaluate whether there are substantial differences in the distributions of danceability scores across multiple playlist categories. It is particularly useful for data that do not follow a normal distribution.
+
+**Appropriateness:** The Kruskal-Wallis H Test is suitable for our analysis because it does not assume that the data are normally distributed, making it ideal for examining ordinal or skewed data. It assesses differences in the median scores of danceability among different groups, which helps determine if any particular playlist type stands out.
+
+**Implementation:** Danceability values are grouped by playlist type, and the test is applied to these groups to check if the observed variance in danceability is statistically significant.
+ 
+## Data Visualization
+ 
+**Boxplot and Histogram:**
+
+**Boxplot:** This visualization gives a clear summary of the danceability distribution within each playlist type, showcasing the median, quartiles, and potential outliers. It is an effective tool for spotting which playlists tend to be more or less danceable.
+
+**Histogram:** Helps visualize the overall distribution and density of danceability scores across playlists, offering insights into the shape of the distribution and the spread of values.
+
+**Purpose:** These visual tools are vital for initial exploratory analysis, enabling stakeholders to quickly identify distinct patterns or anomalies in the data, which could suggest opportunities for optimization or adjustment in playlist creation strategies.
+ 
+## Further Statistical Testing (Conditional)
+ 
+**Mann-Whitney U Test:**
+
+**Trigger:** Initiated when the Kruskal-Wallis test shows significant results, indicating potential interesting differences warranting closer examination.
+
+**Purpose:** This test delves deeper by comparing the danceability levels between a specific playlist identified as a ‘hit’ and a range of other playlists. A ‘hit’ in this context is defined as a playlist that achieves significantly higher user engagement or popularity metrics compared to others.
+
+**Application:** By focusing on specific instances where playlists significantly differ, this test evaluates whether these differences are consistent and whether any particular playlist can be characterized as uniquely appealing based on its danceability.
+ 
+## Execution
+ 
+**Data Grouping:** Danceability scores are categorized by playlist type in preparation for the Kruskal-Wallis H test.
+
+**Kruskal-Wallis H Test Execution:** This test examines if there are discernible differences in danceability across the grouped data.
+
+**Visual Analysis:** Includes generating a boxplot and histogram to thoroughly analyze the danceability distributions.
+
+**Conditional Analysis:** If initial tests indicate significant variance, a Mann-Whitney U test is employed for further detailed comparisons.
+
+```{r}
+# Load necessary libraries
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(stats)
+
+# Load the data
+df <- data
+
+# Prepare the data for the Kruskal-Wallis H Test
+# We group by 'Type' and then create a list of danceability values for each type
+grouped <- df %>% 
+  group_by(Type) %>% 
+  summarise(danceability = list(danceability), .groups = 'drop')
+
+# 'unlist' is used to flatten the list of danceability values into a single vector
+# 'rep' repeats each type according to the length of each list to ensure proper matching
+values <- unlist(grouped$danceability)
+groups <- rep(grouped$Type, times = sapply(grouped$danceability, length))
+
+# Perform the Kruskal-Wallis test
+kruskal_test <- kruskal.test(x = values, g = groups)
+
+# Print the results of the Kruskal-Wallis test
+print(paste("Kruskal-Wallis H Test statistic:", kruskal_test$statistic, ", p-value:", kruskal_test$p.value))
+
+# If significant differences found, visualize the results
+if (kruskal_test$p.value < 0.05) {
+  print("Significant differences in danceability levels across different types of playlists.")
+  
+  # Boxplot of danceability by playlist type
+  boxplot <- ggplot(df, aes(x = Type, y = danceability)) +
+    geom_boxplot() +
+    labs(title = "Boxplot of Danceability Levels by Playlist Type", x = "Playlist Type", y = "Danceability Level") +
+    theme_minimal()
+  print(boxplot)
+  ggsave("KruskalTest_Boxplot_Danceability.png", plot = boxplot)
+  
+  # Histogram of danceability by playlist type
+  histogram <- ggplot(df, aes(x = danceability, fill = Type)) +
+    geom_histogram(aes(y = ..density..), binwidth = 0.1, position = "identity", alpha = 0.5) +
+    labs(title = "Density Histogram of Danceability by Playlist Type", x = "Danceability", y = "Density") +
+    theme_minimal()
+  print(histogram)
+  ggsave("KruskalTest_Histogram_Danceability.png", plot = histogram)
+}
+
+# Further analysis if there are significant differences
+if (kruskal_test$p.value < 0.05) {
+  a <- 1  # start of range
+  b <- 10  # end of range
+  c <- 250  # specific playlist ID
+  
+  range_playlists <- df %>% filter(playlist_id >= a & playlist_id <= b)
+  specific_playlist <- df %>% filter(playlist_id == c)
+  
+  if (nrow(specific_playlist) > 0) {
+    playlist_type_c <- specific_playlist$Type[1]
+    matching_type_playlists <- range_playlists %>% filter(Type == playlist_type_c)
+    
+    if (nrow(matching_type_playlists) > 0) {
+      # Mann-Whitney U Test
+      u_test <- wilcox.test(matching_type_playlists$danceability, specific_playlist$danceability)
+      
+      # KDE plot for visual comparison
+      density_plot <- ggplot() +
+        geom_density(data = matching_type_playlists, aes(x = danceability, fill = "Range Playlists"), alpha = 0.5) +
+        geom_density(data = specific_playlist, aes(x = danceability, fill = "Specific Playlist"), alpha = 0.5) +
+        labs(title = "Danceability Distribution Comparison", x = "Danceability Level", y = "Density") +
+        scale_fill_manual(values = c("blue", "red")) +
+        theme_minimal()
+      print(density_plot)
+      ggsave("MannWhitneyU_Density_Comparison.png", plot = density_plot)
+      
+      # Output the test results
+      if (u_test$p.value < 0.05) {
+        print("Danceability distribution of playlist c is significantly different from matched types in range a to b. Recommendation: Reject playlist c.")
+      } else {
+        print("Danceability distribution of playlist c is similar to matched types in range a to b. Recommendation: Recommend playlist c.")
+      }
+    } else {
+      print("No matching playlist types found within range a to b. General comparison proceeds.")
+    }
+  }
+}
+```
+## Results Interpretation
+ 
+**Statistical Outputs:** The Kruskal-Wallis H test provides a p-value that quantifies whether the variances in danceability across playlist types are statistically meaningful.
+
+**Visual Outputs:** The boxplot and histogram visually articulate these differences, presenting a straightforward graphical depiction of distribution trends.
+
+**Further Analysis:** If applicable, the Mann-Whitney U test provides deeper insight into specific contrasts, supported by density plots that illustrate overlapping danceability distributions.
+ 
+## Conclusion
+ 
+Analyzing danceability across playlist types yields essential insights that can influence the strategic decisions of music streaming services. By understanding how danceability varies, curators can better align their content with the musical preferences and rhythmic expectations of different listener groups. This report not only explicates the statistical methodologies and their rationale but also contextualizes the findings within the broader framework of music streaming trends, guiding actionable decisions for optimizing playlist curation and enhancing listener engagement.
+
+## Analyzing Energy Levels Across Playlist Types
+
+## Objective
+
+The primary goal of this analysis is to ascertain whether there are statistically significant variations in the energy levels among different types of playlists. Such insights are invaluable for aligning playlist content with the energy preferences of specific listener demographics, thereby optimizing user experience and engagement.
+
+## Statistical Analysis
+
+**Kruskal-Wallis H Test:**
+
+**Overview:** Utilized for its efficacy in handling datasets that do not conform to normal distribution, this non-parametric method is ideal for comparing energy levels across diverse playlist types.
+
+**Appropriateness:** The test is particularly suited for data like ours as it does not assume normality and can effectively handle ordinal or skewed data distributions. It evaluates whether the median energy levels differ significantly across groups, providing a reliable indicator of variation.
+
+**Implementation:** Energy data is grouped by playlist type and the Kruskal-Wallis H test is applied to these groups to determine if observed differences in energy distributions are statistically meaningful.
+ 
+**Data Visualization**
+ 
+**Boxplot and Histogram:**
+
+**Boxplot:** Offers a concise visualization of energy distribution within each playlist type, highlighting medians, interquartile ranges, and potential outliers. This visualization helps in quickly identifying which types of playlists tend to feature higher or lower energy levels.
+
+**Histogram:** Provides a detailed view of the distribution and density of energy values across playlists. It is instrumental in revealing the overall shape of the energy distribution, identifying skewness, and detecting the presence of multiple modes.
+
+**Purpose:** These tools are crucial for preliminary exploratory analysis, enabling stakeholders to rapidly identify trends, anomalies, and patterns that could warrant deeper investigation or immediate action.
+ 
+## Further Statistical Testing (Conditional)
+ 
+**Mann-Whitney U Test:**
+
+**Trigger:** Initiated when the Kruskal-Wallis test indicates significant differences, suggesting a need for more granular analysis.
+
+**Purpose:** This test further examines the energy levels between specific playlists or identified groups, pinpointing finer distinctions in energy distribution that might be obscured in broader analyses.
+
+**Application:** By comparing individual playlists or specific groups, this test assesses consistency and highlights unique cases where a playlist’s energy significantly deviates from others, potentially signaling niche or unique audience interests.
+ 
+## Execution
+ 
+**Data Grouping:** Energy values are categorized by playlist types to set up for the Kruskal-Wallis H test.
+
+**Kruskal-Wallis H Test Execution:** This test checks for significant discrepancies in energy levels across categorized data.
+
+**Visual Analysis:** Involves creating a boxplot and histogram to visually dissect and understand energy distributions.
+
+**Conditional Analysis:** If initial results show significant differences, the Mann-Whitney U test is employed to delve deeper into specific comparisons.
+
+```{r}
+# Prepare the data for the Kruskal-Wallis H Test
+# We group by 'Type' and then create a list of energy values for each type
+grouped <- df %>% 
+  group_by(Type) %>% 
+  summarise(energy = list(energy), .groups = 'drop')
+
+# 'unlist' is used to flatten the list of energy values into a single vector
+# 'rep' repeats each type according to the length of each list to ensure proper matching
+values <- unlist(grouped$energy)
+groups <- rep(grouped$Type, times = sapply(grouped$energy, length))
+
+# Perform the Kruskal-Wallis test
+kruskal_test <- kruskal.test(x = values, g = groups)
+
+# Print the results of the Kruskal-Wallis test
+print(paste("Kruskal-Wallis H Test statistic:", kruskal_test$statistic, ", p-value:", kruskal_test$p.value))
+
+# If significant differences found, visualize the results
+if (kruskal_test$p.value < 0.05) {
+  print("Significant differences in energy levels across different types of playlists.")
+  
+  # Boxplot of energy by playlist type
+  boxplot <- ggplot(df, aes(x = Type, y = energy)) +
+    geom_boxplot() +
+    labs(title = "Boxplot of Energy Levels by Playlist Type", x = "Playlist Type", y = "Energy Level") +
+    theme_minimal()
+  print(boxplot)
+  ggsave("KruskalTest_Boxplot_Energy.png", plot = boxplot)
+  
+  # Histogram of energy by playlist type
+  histogram <- ggplot(df, aes(x = energy, fill = Type)) +
+    geom_histogram(aes(y = ..density..), binwidth = 0.1, position = "identity", alpha = 0.5) +
+    labs(title = "Density Histogram of Energy by Playlist Type", x = "Energy", y = "Density") +
+    theme_minimal()
+  print(histogram)
+  ggsave("KruskalTest_Histogram_Energy.png", plot = histogram)
+}
+
+# Further analysis if there are significant differences
+if (kruskal_test$p.value < 0.05) {
+  a <- 1  # start of range
+  b <- 10  # end of range
+  c <- 250  # specific playlist ID
+  
+  range_playlists <- df %>% filter(playlist_id >= a & playlist_id <= b)
+  specific_playlist <- df %>% filter(playlist_id == c)
+  
+  if (nrow(specific_playlist) > 0) {
+    playlist_type_c <- specific_playlist$Type[1]
+    matching_type_playlists <- range_playlists %>% filter(Type == playlist_type_c)
+    
+    if (nrow(matching_type_playlists) > 0) {
+      # Mann-Whitney U Test
+      u_test <- wilcox.test(matching_type_playlists$energy, specific_playlist$energy)
+      
+      # KDE plot for visual comparison
+      density_plot <- ggplot() +
+        geom_density(data = matching_type_playlists, aes(x = energy, fill = "Range Playlists"), alpha = 0.5) +
+        geom_density(data = specific_playlist, aes(x = energy, fill = "Specific Playlist"), alpha = 0.5) +
+        labs(title = "Energy Distribution Comparison", x = "Energy Level", y = "Density") +
+        scale_fill_manual(values = c("blue", "red")) +
+        theme_minimal()
+      print(density_plot)
+      ggsave("MannWhitneyU_Density_Comparison_Energy.png", plot = density_plot)
+      
+      # Output the test results
+      if (u_test$p.value < 0.05) {
+        print("Energy distribution of playlist c is significantly different from matched types in range a to b. Recommendation: Reject playlist c.")
+      } else {
+        print("Energy distribution of playlist c is similar to matched types in range a to b. Recommendation: Recommend playlist c.")
+      }
+    } else {
+      print("No matching playlist types found within range a to b. General comparison proceeds.")
+    }
+  }
+}
+``` 
+ 
+## Results Interpretation
+ 
+**Statistical Outputs:** The Kruskal-Wallis H test yields a p-value that quantifies whether the differences in energy across playlist types are statistically significant.
+
+**Visual Outputs:** Visuals such as boxplots and histograms illustrate these differences, providing a clear graphical representation of distribution trends.
+
+**Further Analysis:** Where applicable, the Mann-Whitney U test offers deeper insights into particular comparisons, supported by density plots that visualize how closely energy distributions overlap.
+ 
+## Conclusion
+ 
+This analysis of energy levels across different playlist types delivers critical insights that could profoundly influence the decisions of music curators and marketers. Understanding the variability of energy within playlists helps stakeholders tailor their offerings to better match the dynamic and emotional intensity desired by different listener segments. This report not only details the statistical methodologies used but also contextualizes the findings within the broader industry landscape, guiding actionable strategies for playlist optimization and content curation in the dynamic environment of music streaming services.
+ 
+## Analysis of Common vs. Unique Songs in Playlists
+
+## Objective
+ 
+The primary objective of this study is to identify whether there are statistically significant differences in danceability scores between common songs and unique songs. This information could assist curators in optimizing playlists for targeted experiences and enhancing the overall listener experience by strategically selecting tracks that align with the desired activity levels of the audience.
+ 
+## Statistical Analysis
+ 
+**Mann-Whitney U Test:**
+
+**Choice of Test:** The Mann-Whitney U Test, a non-parametric test, was chosen because it is robust against non-normal distributions and is ideal for comparing differences between two independent groups. This test evaluates whether two samples are likely to derive from the same distribution.
+
+**Purpose:** To determine if the median danceability of common songs differs significantly from that of unique songs, which could imply that one category tends to be more danceable than the other.
+ 
+## Data Visualization
+ 
+**Density Plots:**
+
+**Rationale:** Density plots were utilized to visually compare the distribution of danceability scores between common and unique songs.
+
+**Implementation:** Using R’s ggplot2, density plots for both categories were overlaid to provide a clear visual representation of how danceability scores are distributed within each song category. This aids in visually assessing the overlap and differences between the two distributions.
+ 
+## Execution
+ 
+**Data Preparation:** Data was loaded and filtered into two groups, common songs and unique songs, using R’s dplyr package for efficient data manipulation.
+
+**Visualization:** Density plots were generated to visually assess the distribution characteristics of danceability within each group.
+Statistical Testing: A Mann-Whitney U Test was conducted to statistically verify the visual insights, providing a p-value to assess the significance of the observed differences.
+ 
+## Results Interpretation
+ 
+**Statistical Output:** The output from the Mann-Whitney U Test includes a test statistic and a p-value, which helps determine if the differences in danceability scores between common and unique songs are statistically significant.
+
+**Visual Analysis:** The density plots complement the statistical test by showing the shape of the danceability distributions, highlighting any significant overlaps or shifts between the two groups.
+ 
+## Conclusion
+ 
+The analysis of danceability levels between common and unique songs provides essential insights that could influence strategic decisions in music playlist curation. If significant differences are found, streaming services might consider these findings to tailor playlist experiences that cater to different listener preferences—potentially using common songs to drive engagement in playlists meant for active, dance-oriented environments and unique songs to enrich the listening experience in more diverse or niche settings.
+ 
+This study not only underscores the importance of leveraging statistical methodologies to inform content strategies but also highlights how targeted data analysis can enhance service offerings in the competitive landscape of music streaming.
+ 
+```{r}
+# Filter data for 'Common Songs' and 'Unique Songs'
+common_songs <- df %>% filter(song_category == 'Common Song')
+unique_songs <- df %>% filter(song_category == 'Unique Song')
+
+# Visualize the danceability distributions
+ggplot() +
+  geom_density(data = common_songs, aes(x = energy, fill = 'Common Songs'), alpha = 0.5, color = 'blue') +
+  geom_density(data = unique_songs, aes(x = energy, fill = 'Unique Songs'), alpha = 0.5, color = 'red') +
+  labs(title = 'Danceability Distribution Comparison', x = 'Danceability Score', y = 'Density') +
+  theme_minimal() +
+  scale_fill_manual(values = c('Common Songs' = 'blue', 'Unique Songs' = 'red')) +
+  theme(legend.title = element_blank())
+
+# Conduct the Mann-Whitney U Test
+test_result <- wilcox.test(danceability ~ song_category, data = df %>% filter(song_category %in% c('Common Song', 'Unique Song')))
+
+# Print the Mann-Whitney U Test statistic and p-value
+cat(sprintf("Mann-Whitney U Test statistic: %f, p-value: %f\n", test_result$statistic, test_result$p.value))
+
+# Interpret the results
+if (test_result$p.value < 0.05) {
+  cat("Danceability scores significantly differ between Common Songs and Unique Songs. Common songs may tend to be more danceable.\n")
+} else {
+  cat("No significant difference in danceability scores between Common Songs and Unique Songs.\n")
+}
+```
